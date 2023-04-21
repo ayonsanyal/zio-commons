@@ -1,6 +1,6 @@
 package com.ayon.cassandra.context
 
-import com.channelpilot.ayon.config.Config
+import com.ayon.config.Config
 import io.getquill.{CassandraContextConfig, CassandraZioSession}
 import zio.ZLayer
 
