@@ -1,4 +1,4 @@
-package com.channelpilot.di.config
+package com.ayon.config
 
 import com.typesafe.config.Config
 import zio.config.magnolia.descriptor

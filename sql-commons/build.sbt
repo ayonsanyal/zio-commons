@@ -1,4 +1,4 @@
-enablePlugins(ChannelPilotPlugin)
+enablePlugins(BuildEnvPlugin)
 
 Global / logLevel     := Level.Debug
 Global / scalaVersion := "3.2.2"
@@ -14,6 +14,6 @@ lazy val root = (project in file("."))
       "io.getquill"           %% "quill-jdbc"                   % "4.6.0",
       "io.github.scottweaver" %% "zio-2-0-testcontainers-mysql" % "0.9.0",
       "io.github.scottweaver" %% "zio-2-0-db-migration-aspect"  % "0.9.0",
-      "com.channelpilot"       % "config"                    % "2023-02-10.4"
+      "com.ayon"       % "config"                    % "2023-02-10.4"
     )
   )
