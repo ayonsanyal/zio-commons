@@ -1,0 +1,102 @@
+pipeline {
+  agent any
+
+  options {
+      ansiColor('xterm')
+  }
+
+  environment {
+      SBT_HOME = tool name: 'sbt1.7.0', type: 'org.jvnet.hudson.plugins.SbtPluginBuilder$SbtInstallation'
+      PATH = "${env.SBT_HOME}/bin:${env.PATH}"
+  }
+
+  tools {
+    jdk 'JDK17'
+  }
+
+  parameters {
+    booleanParam(defaultValue:false, description: 'create a new release version', name: 'createVersion')
+  }
+
+  stages {
+    stage("Update version") {
+      when {
+        not {
+          branch "main"
+        }
+        expression {
+          params.createVersion == true
+        }
+      }
+      steps {
+        script {
+          def date = sh(script: "date --iso-8601", returnStdout: true).trim()
+          def version = sh(script: "cat version", returnStdout: true).trim()
+          def (major, minor_pre) = version.tokenize('.')
+          def (minor, minor_add) = minor_pre.tokenize('-')
+          if ( major != date ) {
+            new_version = date + ".1"
+          } else {
+            new_minor = minor.toInteger() + 1
+            new_version = major + "." + new_minor
+          }
+          echo "New version: " + new_version
+          sh "echo -n $new_version > version"
+        }
+      }
+    }
+
+    stage("Build") {
+      steps {
+        script {
+          if (env.BRANCH_NAME == "pre-release") {
+            sh "sbt -Denv=staging publish"
+          } else if (env.BRANCH_NAME == "main") {
+            sh "sbt -Denv=production publish"
+          } else {
+            sh "sbt -Denv=dev publish"
+          }
+        }
+      }
+    }
+
+    stage("Commit version") {
+      when {
+        branch "pre-release"
+        expression {
+          params.createVersion == true
+        }
+      }
+      steps {
+        sh "git add version"
+        sh "git commit -m \"update version ${new_version}\""
+        sh "git push origin HEAD:pre-release"
+        sh "git tag -a \"v${new_version}\" -m \"new version\""
+        sh "git push origin \"v${new_version}\""
+      }
+    }
+
+    stage ("Set deploy version") {
+      when {
+        anyOf {
+          branch "main"
+          branch "pre-release"
+        }
+      }
+      steps {
+        script {
+          def version = sh(script: "cat version", returnStdout: true).trim()
+          def projectName = env.JOB_NAME.split("/", 2)[0]
+          echo "${projectName}"
+          if (env.BRANCH_NAME == "main") {
+            sh "grep -q \"${projectName}.deploy.version=\" /var/lib/jenkins/version/live-versions.properties && sed -E -i 's/(${projectName}.deploy.version=).*/\1${version}/' /var/lib/jenkins/version/live-versions.properties || echo \"${projectName}.deploy.version=${version}\" >> /var/lib/jenkins/version/live-versions.properties"
+            sh "grep -q \"${projectName}.deploy.branch=\" /var/lib/jenkins/version/live-versions.properties && sed -E -i 's/(${projectName}.deploy.branch=).*/\1main/' /var/lib/jenkins/version/live-versions.properties || echo \"${projectName}.deploy.branch=main\" >> /var/lib/jenkins/version/live-versions.properties"
+          } else {
+            sh "grep -q \"${projectName}.deploy.version=\" /var/lib/jenkins/version/uat-versions.properties && sed -E -i 's/(${projectName}.deploy.version=).*/\1${version}/' /var/lib/jenkins/version/uat-versions.properties || echo \"${projectName}.deploy.version=${version}\" >> /var/lib/jenkins/version/uat-versions.properties"
+            sh "grep -q \"${projectName}.deploy.branch=\" /var/lib/jenkins/version/uat-versions.properties && sed -E -i 's/(${projectName}.deploy.branch=).*/\1pre-release/' /var/lib/jenkins/version/uat-versions.properties || echo \"${projectName}.deploy.branch=pre-release\" >> /var/lib/jenkins/version/uat-versions.properties"
+          }
+        }
+      }
+    }
+  }
+}
